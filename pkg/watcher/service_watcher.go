@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -45,6 +46,12 @@ func (w *ServiceWatcher) handleServiceEvent(event watch.Event) {
 		return
 	}
 
+	// Get pods for this service
+	pods, err := w.getPodsForService(service)
+	if err != nil {
+		log.Printf("Error getting pods for service %s/%s: %v", service.Namespace, service.Name, err)
+	}
+
 	// Get endpoints
 	endpoints := []string{}
 	if eps, err := w.client.CoreV1().Endpoints(service.Namespace).Get(context.Background(), service.Name, metav1.GetOptions{}); err == nil {
@@ -74,9 +81,67 @@ func (w *ServiceWatcher) handleServiceEvent(event watch.Event) {
 		Endpoints: endpoints,
 		Ports:     ports,
 		CreatedAt: service.CreationTimestamp.Time,
-		Uptime:    time.Since(service.CreationTimestamp.Time).Round(time.Second).String(),
+		Uptime:    calculateUptimeFromPods(pods),
 	}
 
 	w.services[service.Name] = status
 	w.updateFunc(status)
+}
+
+func (w *ServiceWatcher) getPodsForService(svc *corev1.Service) ([]corev1.Pod, error) {
+	if svc.Spec.Selector == nil {
+		return nil, nil
+	}
+
+	labelSelector := metav1.FormatLabelSelector(&metav1.LabelSelector{
+		MatchLabels: svc.Spec.Selector,
+	})
+
+	pods, err := w.client.CoreV1().Pods(svc.Namespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return pods.Items, nil
+}
+
+func calculateUptimeFromPods(pods []corev1.Pod) string {
+	if len(pods) == 0 {
+		return "N/A"
+	}
+
+	var oldestPodTime *time.Time
+	for _, pod := range pods {
+		// Only consider running pods
+		if pod.Status.Phase == corev1.PodRunning {
+			podStartTime := pod.Status.StartTime
+			if podStartTime != nil {
+				if oldestPodTime == nil || podStartTime.Time.Before(*oldestPodTime) {
+					oldestPodTime = &podStartTime.Time
+				}
+			}
+		}
+	}
+
+	if oldestPodTime == nil {
+		return "N/A"
+	}
+
+	duration := time.Since(*oldestPodTime)
+	return formatDuration(duration)
+}
+
+func formatDuration(d time.Duration) string {
+	days := int(d.Hours() / 24)
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm", days, hours, minutes)
+	} else if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
