@@ -39,6 +39,31 @@
             </div>
         </nav>
 
+        <!-- Add this after the navigation bar -->
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
+            <div class="bg-white shadow-sm rounded-lg p-4 mb-6">
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <div class="flex-shrink-0">
+                        <div class="flex items-center space-x-4">
+                            <button id="show-all" 
+                                    onclick="showAllNamespaces()"
+                                    class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-k8s-blue">
+                                Show All
+                            </button>
+                            <button id="hide-all" 
+                                    onclick="hideAllNamespaces()"
+                                    class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-k8s-blue">
+                                Hide All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="namespace-toggles" class="mt-4 flex flex-wrap gap-2">
+                    <!-- Namespace toggles will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+
         <main>
             <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
                 <!-- Initial load trigger -->
@@ -66,11 +91,38 @@
     </div>
 
     <script>
-        function updateServices(data) {
-            const groups = JSON.parse(data);
-            const container = document.getElementById("services-container");
+        // Store hidden namespaces in localStorage
+        let hiddenNamespaces = new Set(JSON.parse(localStorage.getItem('hiddenNamespaces') || '[]'));
+        let lastGroups = null;
+
+        function updateNamespaceToggles(groups) {
+            const container = document.getElementById('namespace-toggles');
+            const uniqueNamespaces = [...new Set(groups.map(g => g.namespace))].sort();
             
-            container.innerHTML = groups.map(group => `
+            container.innerHTML = uniqueNamespaces.map(ns => `
+                <button 
+                    data-namespace="${ns}"
+                    class="namespace-toggle px-2.5 py-1 rounded-full text-xs font-medium ${
+                        hiddenNamespaces.has(ns) 
+                            ? 'bg-gray-100 text-gray-600' 
+                            : 'bg-k8s-blue bg-opacity-10 text-k8s-blue'
+                    }"
+                    onclick="toggleNamespaceVisibility('${ns}')">
+                    ${ns}
+                    <span class="ml-1">${hiddenNamespaces.has(ns) ? '👁️' : '👁️‍🗨️'}</span>
+                </button>
+            `).join('');
+        }
+
+        function updateServices(data) {
+            const groups = typeof data === 'string' ? JSON.parse(data) : data;
+            lastGroups = groups; // Store the latest data
+            
+            const container = document.getElementById("services-container");
+            // Filter out hidden namespaces
+            const visibleGroups = groups.filter(group => !hiddenNamespaces.has(group.namespace));
+            
+            container.innerHTML = visibleGroups.map(group => `
                 <div class="mb-6 bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200">
                     <div class="flex items-center justify-between bg-gray-50 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
                          onclick="toggleNamespace('${group.namespace}')">
@@ -82,7 +134,11 @@
                                 ${group.services.length} services
                             </span>
                         </div>
-                        <svg class="h-5 w-5 text-gray-400 transform transition-transform duration-200" id="chevron-${group.namespace}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="h-5 w-5 text-gray-400 transform transition-transform duration-200" 
+                             id="chevron-${group.namespace}" 
+                             fill="none" 
+                             stroke="currentColor" 
+                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
@@ -125,6 +181,23 @@
                     </div>
                 </div>
             `).join('');
+
+            // Update namespace toggles if needed
+            updateNamespaceToggles(groups);
+        }
+
+        function toggleNamespaceVisibility(namespace) {
+            if (hiddenNamespaces.has(namespace)) {
+                hiddenNamespaces.delete(namespace);
+            } else {
+                hiddenNamespaces.add(namespace);
+            }
+            localStorage.setItem('hiddenNamespaces', JSON.stringify([...hiddenNamespaces]));
+            
+            // Update UI immediately using the last known data
+            if (lastGroups) {
+                updateServices(lastGroups);
+            }
         }
 
         function toggleNamespace(namespace) {
@@ -134,17 +207,34 @@
             chevron.classList.toggle('rotate-180');
         }
 
-        // Handle initial load response
+        // Handle WebSocket messages
+        htmx.on("ws-message", function(evt) {
+            updateServices(evt.detail.message);
+        });
+
+        // Handle initial load
         document.body.addEventListener('htmx:afterOnLoad', function(evt) {
             if (evt.detail.elt.id === 'services-container') {
                 updateServices(evt.detail.xhr.response);
             }
         });
 
-        // Handle WebSocket messages
-        htmx.on("ws-message", function(evt) {
-            updateServices(evt.detail.message);
-        });
+        // Add these functions
+        function showAllNamespaces() {
+            hiddenNamespaces.clear();
+            localStorage.setItem('hiddenNamespaces', '[]');
+            if (lastGroups) {
+                updateServices(lastGroups);
+            }
+        }
+
+        function hideAllNamespaces() {
+            if (lastGroups) {
+                hiddenNamespaces = new Set(lastGroups.map(g => g.namespace));
+                localStorage.setItem('hiddenNamespaces', JSON.stringify([...hiddenNamespaces]));
+                updateServices(lastGroups);
+            }
+        }
     </script>
 </body>
 </html>

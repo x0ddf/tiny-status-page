@@ -20,6 +20,12 @@ type Server struct {
 	services map[string]*types.ServiceStatus
 }
 
+// Add this struct to handle WebSocket messages
+type WSMessage struct {
+	Type    string                  `json:"type"`
+	Payload []*types.NamespaceGroup `json:"payload"`
+}
+
 func NewServer() (*Server, error) {
 	tmpl, err := template.ParseFS(content, "templates/index.html")
 	if err != nil {
@@ -118,7 +124,9 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 			groups := s.groupServicesByNamespace()
 			if err := conn.WriteJSON(groups); err != nil {
-				log.Printf("WebSocket write failed: %v", err)
+				if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("WebSocket write failed: %v", err)
+				}
 				return
 			}
 		}
