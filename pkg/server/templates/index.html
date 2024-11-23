@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html class="h-full bg-gray-50">
+<head>
+    <title>Kubernetes Service Monitor</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        k8s: {
+                            blue: '#326CE5',
+                            gray: '#2F3136'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full">
+    <div class="min-h-full">
+        <!-- Navigation -->
+        <nav class="bg-k8s-blue">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-8 w-8" fill="white" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12.002 0c-.325 0-.65.088-.94.264L3.27 4.653c-.581.352-.94.992-.94 1.683v9.33c0 .69.359 1.33.94 1.682l7.79 4.39c.29.176.615.264.94.264.326 0 .65-.088.941-.264l7.79-4.39c.582-.351.941-.992.941-1.682v-9.33c0-.691-.359-1.331-.94-1.683L12.943.264c-.29-.176-.615-.264-.94-.264zm-.074.934c.22 0 .441.059.636.176l7.79 4.39c.395.238.637.675.637 1.143v9.33c0 .468-.242.904-.637 1.143l-7.79 4.389c-.195.117-.415.176-.636.176-.22 0-.44-.059-.635-.176l-7.79-4.39c-.395-.238-.637-.674-.637-1.142v-9.33c0-.468.242-.905.637-1.143l7.79-4.39c.195-.117.415-.176.635-.176z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <h1 class="text-white text-xl font-bold">Kubernetes Service Monitor</h1>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main>
+            <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+                <!-- Initial load trigger -->
+                <div id="services-container"
+                     hx-get="/api/services"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    <div class="flex items-center justify-center h-64">
+                        <div class="text-center">
+                            <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-k8s-blue">
+                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Loading services...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WebSocket updates -->
+                <div id="ws-updates" hx-ws="connect:/ws" hx-swap="none"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function updateServices(data) {
+            const groups = JSON.parse(data);
+            const container = document.getElementById("services-container");
+            
+            container.innerHTML = groups.map(group => `
+                <div class="mb-6 bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200">
+                    <div class="flex items-center justify-between bg-gray-50 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+                         onclick="toggleNamespace('${group.namespace}')">
+                        <div class="flex items-center space-x-2">
+                            <h2 class="text-lg font-semibold text-gray-900">
+                                ${group.namespace}
+                            </h2>
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-k8s-blue bg-opacity-10 text-k8s-blue">
+                                ${group.services.length} services
+                            </span>
+                        </div>
+                        <svg class="h-5 w-5 text-gray-400 transform transition-transform duration-200" id="chevron-${group.namespace}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                    <div id="ns-${group.namespace}" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 p-4">
+                        ${group.services.map(service => `
+                            <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow duration-200">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-medium text-gray-900">${service.name}</h3>
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${!service.lastFailure ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                        ${!service.lastFailure ? 'Healthy' : 'Failed'}
+                                    </span>
+                                </div>
+                                <div class="space-y-2">
+                                    <div class="text-sm text-gray-500">Type: <span class="text-gray-900">${service.type}</span></div>
+                                    <div class="text-sm text-gray-500">Cluster IP: <span class="text-gray-900">${service.clusterIP}</span></div>
+                                    <div class="text-sm text-gray-500">Uptime: <span class="text-gray-900">${service.uptime}</span></div>
+                                    
+                                    <div class="mt-4">
+                                        <h4 class="text-sm font-medium text-gray-900 mb-2">Endpoints</h4>
+                                        <ul class="space-y-1">
+                                            ${service.endpoints.map(ep => `
+                                                <li class="text-sm text-gray-600 bg-gray-50 px-2 py-1 rounded">${ep}</li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="mt-4">
+                                        <h4 class="text-sm font-medium text-gray-900 mb-2">Ports</h4>
+                                        <ul class="space-y-1">
+                                            ${service.ports.map(p => `
+                                                <li class="text-sm text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                                                    ${p.port} ${p.protocol} ${p.name ? `<span class="text-gray-400">(${p.name})</span>` : ''}
+                                                </li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleNamespace(namespace) {
+            const element = document.getElementById(`ns-${namespace}`);
+            const chevron = document.getElementById(`chevron-${namespace}`);
+            element.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        }
+
+        // Handle initial load response
+        document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+            if (evt.detail.elt.id === 'services-container') {
+                updateServices(evt.detail.xhr.response);
+            }
+        });
+
+        // Handle WebSocket messages
+        htmx.on("ws-message", function(evt) {
+            updateServices(evt.detail.message);
+        });
+    </script>
+</body>
+</html>
