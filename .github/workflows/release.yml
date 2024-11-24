@@ -4,7 +4,9 @@ on:
   push:
     tags: [ 'v*' ]
 
-
+env:
+  PLATFORMS: "linux darwrin windows"
+  ARCH: "amd64 arm64"
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,6 +35,7 @@ jobs:
         version: latest
 
   docker:
+    name: Release docker image
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
@@ -78,33 +81,45 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
 
   release:
+    name: GH release
     needs: docker
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goosarch:
+          - 'linux/amd64'
+          - 'linux/arm64'
+          - 'darwin/amd64'
+          - 'darwin/arm64'
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
-    
     steps:
     - uses: actions/checkout@v4
-      
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.22'
-        
-    - name: Build release binaries
+    - name: Get OS and arch info
       run: |
-        GOOS=linux GOARCH=amd64 go build -o tiny-status-page-linux-amd64
-        GOOS=linux GOARCH=arm64 go build -o tiny-status-page-linux-arm64
-        GOOS=darwin GOARCH=amd64 go build -o tiny-status-page-darwin-amd64
-        GOOS=darwin GOARCH=arm64 go build -o tiny-status-page-darwin-arm64
-        
-    - name: Create Release
+        GOOSARCH=${{matrix.goosarch}}
+        GOOS=${GOOSARCH%/*}
+        GOARCH=${GOOSARCH#*/}
+        BINARY_NAME=${{github.repository}}-$GOOS-$GOARCH
+        echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
+        echo "GOOS=$GOOS" >> $GITHUB_ENV
+        echo "GOARCH=$GOARCH" >> $GITHUB_ENV
+    - name: Build
+      run: |
+        go build -o "$BINARY_NAME" ./cmd/backend
+    - name: Release Notes
+      run:
+        git log $(git describe HEAD~ --tags --abbrev=0)..HEAD --pretty='format:* %h %s%n  * %an <%ae>' --no-merges >> ".github/RELEASE-TEMPLATE.md"
+    - name: Release with Notes
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          tiny-status-page-linux-amd64
-          tiny-status-page-linux-arm64
-          tiny-status-page-darwin-amd64
-          tiny-status-page-darwin-arm64
-        generate_release_notes: true 
+        body_path: ".github/RELEASE-TEMPLATE.md"
+        draft: true
+        files: ${{env.BINARY_NAME}}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

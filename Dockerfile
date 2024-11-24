@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o tiny-status-page ./cmd/backend
+RUN go build -o tiny-status-page ./cmd/backend
 
 # Final stage
 FROM alpine:3.19
