@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"k8s.io/client-go/tools/clientcmd"
@@ -15,7 +16,24 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func local() (*rest.Config, error) {
+const DefaultPort = "8080"
+const PortVar = "PORT"
+
+func isRunningInCluster() bool {
+	// Check if the service account token file exists
+	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
+		return true
+	}
+	return false
+}
+
+func getKubeConfig() (*rest.Config, error) {
+	// Try in-cluster config first
+	if isRunningInCluster() {
+		return rest.InClusterConfig()
+	}
+
+	// Fallback to local kubeconfig
 	var kubeconfig *string
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
@@ -27,12 +45,10 @@ func local() (*rest.Config, error) {
 	// use the current context in kubeconfig
 	return clientcmd.BuildConfigFromFlags("", *kubeconfig)
 }
-func cluster() (*rest.Config, error) {
-	return rest.InClusterConfig()
-}
+
 func main() {
 	// Create kubernetes client
-	config, err := local()
+	config, err := getKubeConfig()
 	if err != nil {
 		log.Fatalf("Failed to get cluster config: %v", err)
 	}
@@ -40,6 +56,10 @@ func main() {
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
+	}
+	var port string
+	if port = os.Getenv(PortVar); port == "" {
+		port = DefaultPort
 	}
 
 	// Initialize server
@@ -49,14 +69,14 @@ func main() {
 	}
 
 	// Initialize service watcher
-	watcher := watcher.NewServiceWatcher(clientset)
-	go watcher.Run(srv.UpdateService)
+	serviceWatcher := watcher.NewServiceWatcher(clientset)
+	go serviceWatcher.Run(srv.UpdateService)
 
 	// Setup HTTP handlers
 	http.HandleFunc("/", srv.HandleIndex)
 	http.HandleFunc("/api/services", srv.HandleServices)
 	http.HandleFunc("/ws", srv.HandleWebSocket)
 
-	log.Printf("Server starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Printf("Server starting on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
