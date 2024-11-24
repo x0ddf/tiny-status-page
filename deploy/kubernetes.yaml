@@ -1,0 +1,90 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiny-status-page
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tiny-status-page
+rules:
+- apiGroups: [""]
+  resources: ["services", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tiny-status-page
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tiny-status-page
+subjects:
+- kind: ServiceAccount
+  name: tiny-status-page
+  namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tiny-status-page
+  labels:
+    app: tiny-status-page
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: tiny-status-page
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tiny-status-page
+  labels:
+    app: tiny-status-page
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tiny-status-page
+  template:
+    metadata:
+      labels:
+        app: tiny-status-page
+    spec:
+      serviceAccountName: tiny-status-page
+      containers:
+      - name: tiny-status-page
+        image: ghcr.io/yourusername/tiny-status-page:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
