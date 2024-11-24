@@ -23,9 +23,6 @@ RUN apk --no-cache add ca-certificates
 
 # Copy the binary from builder
 COPY --from=builder /app/tiny-status-page .
-# Copy templates and static files
-COPY --from=builder /app/pkg/server/templates ./pkg/server/templates
-COPY --from=builder /app/pkg/server/static ./pkg/server/static
 
 # Create non-root user
 RUN adduser -D -u 1000 appuser
