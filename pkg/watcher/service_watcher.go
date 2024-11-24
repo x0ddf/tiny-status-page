@@ -8,10 +8,10 @@ import (
 
 	"github.com/x0ddf/kube-status-page/pkg/types"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	//"k8s.io/client-go/tools/watch"
 )
 
 type ServiceWatcher struct {
@@ -46,31 +46,19 @@ func (w *ServiceWatcher) handleServiceEvent(event watch.Event) {
 		return
 	}
 
-	// Get pods for this service
+	// Get pods and endpoints
 	pods, err := w.getPodsForService(service)
 	if err != nil {
 		log.Printf("Error getting pods for service %s/%s: %v", service.Namespace, service.Name, err)
 	}
 
-	// Get endpoints
-	endpoints := []string{}
-	if eps, err := w.client.CoreV1().Endpoints(service.Namespace).Get(context.Background(), service.Name, metav1.GetOptions{}); err == nil {
-		for _, subset := range eps.Subsets {
-			for _, addr := range subset.Addresses {
-				endpoints = append(endpoints, addr.IP)
-			}
-		}
-	}
+	endpoints := w.getEndpoints(service)
+	ports := w.convertPorts(service.Spec.Ports)
 
-	// Convert ports
-	ports := make([]types.ServicePort, len(service.Spec.Ports))
-	for i, p := range service.Spec.Ports {
-		ports[i] = types.ServicePort{
-			Name:       p.Name,
-			Port:       p.Port,
-			TargetPort: p.TargetPort.IntVal,
-			Protocol:   string(p.Protocol),
-		}
+	// Calculate health status
+	health := "Unhealthy"
+	if len(endpoints) > 0 && hasRunningPod(pods) {
+		health = "Healthy"
 	}
 
 	status := &types.ServiceStatus{
@@ -82,6 +70,7 @@ func (w *ServiceWatcher) handleServiceEvent(event watch.Event) {
 		Ports:     ports,
 		CreatedAt: service.CreationTimestamp.Time,
 		Uptime:    calculateUptimeFromPods(pods),
+		Health:    health,
 	}
 
 	w.services[service.Name] = status
@@ -144,4 +133,72 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh %dm", hours, minutes)
 	}
 	return fmt.Sprintf("%dm", minutes)
+}
+
+func hasRunningPod(pods []corev1.Pod) bool {
+	for _, pod := range pods {
+		if pod.Status.Phase == corev1.PodRunning {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *ServiceWatcher) getEndpoints(service *corev1.Service) []types.EndpointInfo {
+	endpoints := []types.EndpointInfo{}
+
+	// List EndpointSlices for this service
+	slices, err := w.client.DiscoveryV1().EndpointSlices(service.Namespace).List(
+		context.Background(),
+		metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("kubernetes.io/service-name=%s", service.Name),
+		},
+	)
+	if err != nil {
+		log.Printf("Error getting EndpointSlices for service %s/%s: %v",
+			service.Namespace, service.Name, err)
+		return endpoints
+	}
+
+	// Collect endpoints from all slices
+	for _, slice := range slices.Items {
+		if slice.AddressType != discoveryv1.AddressTypeIPv4 {
+			continue
+		}
+
+		for _, endpoint := range slice.Endpoints {
+			if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
+				// Get pod name from endpoint
+				podName := ""
+				if endpoint.TargetRef != nil && endpoint.TargetRef.Kind == "Pod" {
+					podName = endpoint.TargetRef.Name
+				} else if endpoint.Hostname != nil {
+					podName = *endpoint.Hostname
+				}
+
+				// Add each address with its pod name
+				for _, addr := range endpoint.Addresses {
+					endpoints = append(endpoints, types.EndpointInfo{
+						PodName: podName,
+						IP:      addr,
+					})
+				}
+			}
+		}
+	}
+
+	return endpoints
+}
+
+func (w *ServiceWatcher) convertPorts(servicePorts []corev1.ServicePort) []types.ServicePort {
+	ports := make([]types.ServicePort, len(servicePorts))
+	for i, p := range servicePorts {
+		ports[i] = types.ServicePort{
+			Name:       p.Name,
+			Port:       p.Port,
+			TargetPort: p.TargetPort.IntVal,
+			Protocol:   string(p.Protocol),
+		}
+	}
+	return ports
 }
