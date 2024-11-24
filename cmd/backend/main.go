@@ -10,8 +10,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
-	"github.com/x0ddf/kube-status-page/pkg/server"
-	"github.com/x0ddf/kube-status-page/pkg/watcher"
+	"github.com/x0ddf/tiny-status-page/pkg/server"
+	"github.com/x0ddf/tiny-status-page/pkg/watcher"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -47,6 +47,10 @@ func getKubeConfig() (*rest.Config, error) {
 }
 
 func main() {
+	var port string
+	if port = os.Getenv(PortVar); port == "" {
+		port = DefaultPort
+	}
 	// Create kubernetes client
 	config, err := getKubeConfig()
 	if err != nil {
@@ -56,10 +60,6 @@ func main() {
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
-	}
-	var port string
-	if port = os.Getenv(PortVar); port == "" {
-		port = DefaultPort
 	}
 
 	// Initialize server

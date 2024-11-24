@@ -1,4 +1,4 @@
-module github.com/x0ddf/kube-status-page
+module github.com/x0ddf/tiny-status-page
 
 go 1.22
 

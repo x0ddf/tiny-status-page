@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/x0ddf/kube-status-page/pkg/types"
+	"github.com/x0ddf/tiny-status-page/pkg/types"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/x0ddf/kube-status-page/pkg/types"
+	"github.com/x0ddf/tiny-status-page/pkg/types"
 )
 
 type Server struct {
