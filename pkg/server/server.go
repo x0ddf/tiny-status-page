@@ -58,7 +58,11 @@ func (s *Server) HandleIndex(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleServices(w http.ResponseWriter, r *http.Request) {
 	groups := s.groupServicesByNamespace()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(groups)
+	encoder := json.NewEncoder(w)
+	err := encoder.Encode(groups)
+	if err != nil {
+		return
+	}
 }
 
 func (s *Server) groupServicesByNamespace() []*types.NamespaceGroup {
