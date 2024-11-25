@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/x0ddf/tiny-status-page/pkg/utils"
 	"log"
 	"net/http"
 	"os"
@@ -11,25 +12,15 @@ import (
 	"k8s.io/client-go/util/homedir"
 
 	"github.com/x0ddf/tiny-status-page/pkg/server"
-	"github.com/x0ddf/tiny-status-page/pkg/watcher"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const DefaultPort = "8080"
 const PortVar = "PORT"
 
-func isRunningInCluster() bool {
-	// Check if the service account token file exists
-	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
-		return true
-	}
-	return false
-}
-
 func getKubeConfig() (*rest.Config, error) {
 	// Try in-cluster config first
-	if isRunningInCluster() {
+	if utils.IsRunningInCluster() {
 		return rest.InClusterConfig()
 	}
 
@@ -51,16 +42,6 @@ func main() {
 	if port = os.Getenv(PortVar); port == "" {
 		port = DefaultPort
 	}
-	// Create kubernetes client
-	config, err := getKubeConfig()
-	if err != nil {
-		log.Fatalf("Failed to get cluster config: %v", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
 
 	// Initialize server
 	srv, err := server.NewServer()
@@ -68,14 +49,12 @@ func main() {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
-	// Initialize service watcher
-	serviceWatcher := watcher.NewServiceWatcher(clientset)
-	go serviceWatcher.Run(srv.UpdateService)
-
 	// Setup HTTP handlers
 	http.HandleFunc("/", srv.HandleIndex)
-	http.HandleFunc("/api/services", srv.HandleServices)
 	http.HandleFunc("/ws", srv.HandleWebSocket)
+	http.HandleFunc("/api/services", srv.HandleServices)
+	http.HandleFunc("/api/contexts", srv.HandleContextList)
+	http.HandleFunc("/api/contexts/switch", srv.HandleContextSwitch)
 
 	log.Printf("Server starting on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
