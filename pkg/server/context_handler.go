@@ -41,7 +41,11 @@ func (s *Server) HandleContextList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	encoder := json.NewEncoder(w)
+	err = encoder.Encode(response)
+	if err != nil {
+		return
+	}
 }
 
 func (s *Server) HandleContextSwitch(w http.ResponseWriter, r *http.Request) {

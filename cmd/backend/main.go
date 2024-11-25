@@ -1,41 +1,14 @@
 package main
 
 import (
-	"flag"
-	"github.com/x0ddf/tiny-status-page/pkg/utils"
+	"github.com/x0ddf/tiny-status-page/pkg/server"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
-
-	"github.com/x0ddf/tiny-status-page/pkg/server"
-	"k8s.io/client-go/rest"
 )
 
 const DefaultPort = "8080"
 const PortVar = "PORT"
-
-func getKubeConfig() (*rest.Config, error) {
-	// Try in-cluster config first
-	if utils.IsRunningInCluster() {
-		return rest.InClusterConfig()
-	}
-
-	// Fallback to local kubeconfig
-	var kubeconfig *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-	flag.Parse()
-
-	// use the current context in kubeconfig
-	return clientcmd.BuildConfigFromFlags("", *kubeconfig)
-}
 
 func main() {
 	var port string
