@@ -31,3 +31,14 @@ type ServicePort struct {
 	TargetPort int32  `json:"targetPort"`
 	Protocol   string `json:"protocol"`
 }
+
+type ClusterInfo struct {
+	CurrentContext string   `json:"currentContext"`
+	Contexts       []string `json:"contexts"`
+	IsInCluster    bool     `json:"isInCluster"`
+}
+
+type StatusResponse struct {
+	Services    []ServiceStatus `json:"services"`
+	ClusterInfo ClusterInfo     `json:"clusterInfo"`
+}

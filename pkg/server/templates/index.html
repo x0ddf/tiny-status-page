@@ -90,6 +90,16 @@
         </main>
     </div>
 
+    <div class="fixed top-4 right-4 z-50" id="context-switcher" style="display: none;">
+        <div class="bg-white p-4 rounded-lg shadow-lg border border-gray-200">
+            <h3 class="text-sm font-medium text-gray-900 mb-2">Kubernetes Context</h3>
+            <select id="context-select" 
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+            </select>
+            <p class="mt-1 text-xs text-gray-500" id="context-mode"></p>
+        </div>
+    </div>
+
     <script>
         // Store hidden namespaces in localStorage
         let hiddenNamespaces = new Set(JSON.parse(localStorage.getItem('hiddenNamespaces') || '[]'));
@@ -293,6 +303,77 @@
                 setTimeout(() => notification.remove(), 300);
             }, 2000);
         }
+
+        // Store current context in localStorage
+        const CURRENT_CONTEXT_KEY = 'currentContext';
+        
+        async function loadContexts() {
+            try {
+                const response = await fetch('/api/contexts');
+                if (response.status === 400) {
+                    document.getElementById('context-mode').textContent = 'Running in-cluster';
+                    return;
+                }
+                
+                const data = await response.json();
+                const select = document.getElementById('context-select');
+                
+                // Clear existing options
+                select.innerHTML = '';
+                
+                // Get stored context or use current from API
+                const storedContext = localStorage.getItem(CURRENT_CONTEXT_KEY);
+                const currentContext = storedContext || data.current;
+                
+                data.contexts.forEach(ctx => {
+                    const option = document.createElement('option');
+                    option.value = ctx;
+                    option.textContent = ctx;
+                    option.selected = ctx === currentContext;
+                    select.appendChild(option);
+                });
+                
+                document.getElementById('context-mode').textContent = 'Running on desktop';
+                document.getElementById('context-switcher').style.display = 'block';
+            } catch (err) {
+                console.error('Failed to load contexts:', err);
+            }
+        }
+
+        document.getElementById('context-select')?.addEventListener('change', async (e) => {
+            try {
+                const newContext = e.target.value;
+                
+                // Disable select during switch
+                e.target.disabled = true;
+                document.getElementById('context-mode').textContent = 'Switching context...';
+                
+                const response = await fetch('/api/contexts/switch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ context: newContext })
+                });
+                
+                if (!response.ok) throw new Error('Failed to switch context');
+                
+                // Store new context in localStorage
+                localStorage.setItem(CURRENT_CONTEXT_KEY, newContext);
+                
+                // Reload services
+                document.getElementById('services-container').innerHTML = '<div class="text-center">Loading services...</div>';
+                window.location.reload();
+                
+            } catch (err) {
+                console.error('Failed to switch context:', err);
+                e.target.disabled = false;
+                loadContexts(); // Reset selection
+            }
+        });
+
+        // Initial load
+        loadContexts();
     </script>
 </body>
 </html>

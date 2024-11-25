@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/x0ddf/tiny-status-page/pkg/types"
@@ -18,6 +19,8 @@ type ServiceWatcher struct {
 	client     *kubernetes.Clientset
 	services   map[string]*types.ServiceStatus
 	updateFunc func(*types.ServiceStatus)
+	mu         sync.Mutex
+	isRunning  bool
 }
 
 func NewServiceWatcher(client *kubernetes.Clientset) *ServiceWatcher {
@@ -201,4 +204,12 @@ func (w *ServiceWatcher) convertPorts(servicePorts []corev1.ServicePort) []types
 		}
 	}
 	return ports
+}
+
+func (w *ServiceWatcher) Stop() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// clean
+	w.services = make(map[string]*types.ServiceStatus)
+	w.isRunning = false
 }
