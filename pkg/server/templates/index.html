@@ -36,21 +36,20 @@
                             <h1 class="text-white text-xl font-bold">Kubernetes Service Monitor</h1>
                         </div>
                     </div>
-
-                    <div class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow">
+                    <div class="flex items-center justify-between p-4 shadow">
                         <div class="flex items-center space-x-4">
                             <select id="context-select" class="border rounded px-2 py-1 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                 <!-- existing context options -->
                             </select>
                             <span id="context-mode" class="text-sm text-gray-600 dark:text-gray-300"></span>
                         </div>
-                        
+
                         <!-- Add theme toggle button -->
-                        <button 
+                        <button
                             onclick="toggleTheme()"
                             class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                             aria-label="Toggle theme">
-                            <span id="theme-icon" class="text-xl">🌞</span>
+                            <span id="theme-icon" class="text-2xl"> ☀️</span>
                         </button>
                     </div>
                 </div>
@@ -108,7 +107,10 @@
         </main>
     </div>
 
-    
+    <!-- Add this div for notifications container -->
+    <div id="notification-container" class="fixed bottom-4 right-4 z-50 space-y-2">
+        <!-- Notifications will be dynamically inserted here -->
+    </div>
 
     <script>
         // Store hidden namespaces in localStorage
@@ -172,12 +174,12 @@
                                     </span>
                                 </div>
                                 <div class="space-y-2">
-                                    <div class="text-sm text-gray-500 dark:text-gray-400">Type: <span class="text-gray-900 dark:text-white">${service.type}</span></div>
-                                    <div class="text-sm text-gray-500">Cluster IP: <span class="text-gray-900">${service.clusterIP}</span></div>
-                                    <div class="text-sm text-gray-500">Uptime: <span class="text-gray-900">${service.uptime}</span></div>
+                                    <div class="text-sm text-gray-500 dark:text-white">Type: <span class="${spanClass()}">${service.type}</span></div>
+                                    <div class="text-sm text-gray-500 dark:text-white">Cluster IP:<span class="${spanClass()}">${service.clusterIP}</span></div>
+                                    <div class="text-sm text-gray-500 dark:text-white">Uptime: <span class="${spanClass()}">${service.uptime}</span></div>
                                     
                                     <div class="mt-4">
-                                        <h4 class="text-sm font-medium text-gray-900 mb-2">Endpoints</h4>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">Endpoints</h4>
                                         <div class="service-endpoints">
                                             ${service.endpoints.map(endpoint => `
                                                 <span 
@@ -220,6 +222,9 @@
             // Update namespace toggles if needed
             updateNamespaceToggles(groups);
         }
+        function spanClass() {
+            return 'px-2 py-1 space-x-8 text-xs font-medium rounded-full bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors duration-150';
+        }
         function getPortDescription(port) {
             const d = [];
             d.push(port.protocol);
@@ -242,7 +247,6 @@
                 updateServices(lastGroups);
             }
         }
-
         function toggleNamespace(namespace) {
             const element = document.getElementById(`ns-${namespace}`);
             const chevron = document.getElementById(`chevron-${namespace}`);
@@ -321,7 +325,8 @@
             try {
                 const response = await fetch('/api/contexts');
                 if (response.status === 400) {
-                    document.getElementById('context-mode').textContent = 'In-Cluster';
+                    // document.getElementById('context-mode').textContent = 'In-Cluster';
+
                     return;
                 }
                 
@@ -343,7 +348,7 @@
                     select.appendChild(option);
                 });
                 
-                document.getElementById('context-mode').textContent = 'Desktop';
+                // document.getElementById('context-mode').textContent = 'Desktop';
                 document.getElementById('context-switcher').style.display = 'block';
             } catch (err) {
                 console.error('Failed to load contexts:', err);
@@ -356,8 +361,8 @@
                 
                 // Disable select during switch
                 e.target.disabled = true;
-                document.getElementById('context-mode').textContent = 'Switching context...';
-                
+                // document.getElementById('context-mode').textContent = 'Switching context...';
+                showNotification("switching context",'info');
                 const response = await fetch('/api/contexts/switch', {
                     method: 'POST',
                     headers: {
@@ -366,7 +371,10 @@
                     body: JSON.stringify({ context: newContext })
                 });
                 
-                if (!response.ok) throw new Error('Failed to switch context');
+                if (!response.ok) {
+                    showNotification(`fail switch context to ${newContext}`,'error');
+                    throw new Error('Failed to switch context');
+                }
                 
                 // Store new context in localStorage
                 localStorage.setItem(CURRENT_CONTEXT_KEY, newContext);
@@ -374,11 +382,12 @@
                 // Reload services
                 document.getElementById('services-container').innerHTML = '<div class="text-center">Loading services...</div>';
                 window.location.reload();
-                
+                showNotification("context updated",'success');
             } catch (err) {
                 console.error('Failed to switch context:', err);
                 e.target.disabled = false;
                 loadContexts(); // Reset selection
+                showNotification('previous context restored','info')
             }
         });
 
@@ -389,10 +398,10 @@
         function setTheme(theme) {
             if (theme === 'dark') {
                 document.documentElement.classList.add('dark');
-                document.getElementById('theme-icon').textContent = '🌙';
+                document.getElementById('theme-icon').textContent = ' 🌓 ';
             } else {
                 document.documentElement.classList.remove('dark');
-                document.getElementById('theme-icon').textContent = '🌞';
+                document.getElementById('theme-icon').textContent = ' ☀️';
             }
             localStorage.setItem('theme', theme);
         }
@@ -407,6 +416,85 @@
             setTheme('dark');
         } else {
             setTheme('light');
+        }
+
+        class NotificationManager {
+            constructor() {
+                this.container = document.getElementById('notification-container');
+            }
+
+            show(message, type = 'info') {
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.className = `
+                    notification max-w-sm p-4 rounded-lg shadow-lg transform transition-all duration-300 
+                    flex items-center justify-between
+                    ${this.getTypeStyles(type)}
+                `;
+                // Add content
+                notification.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        ${this.getIcon(type)}
+                        <p class="text-sm font-medium">${message}</p>
+                    </div>
+                    <button class="ml-4 hover:opacity-75" onclick="this.parentElement.remove()">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                `;
+
+                // Add to container
+                this.container.appendChild(notification);
+
+                // Animate in
+                requestAnimationFrame(() => {
+                    notification.style.transform = 'translateX(0)';
+                    notification.style.opacity = '1';
+                });
+
+                // Auto remove after delay
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => notification.remove(), 3000);
+                }, 5000);
+            }
+
+            getTypeStyles(type) {
+                const styles = {
+                    success: 'bg-green-500 text-white',
+                    error: 'bg-red-500 text-white',
+                    warning: 'bg-yellow-500 text-white',
+                    info: 'bg-blue-500 text-white'
+                };
+                return styles[type] || styles.info;
+            }
+
+            getIcon(type) {
+                const icons = {
+                    success: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>`,
+                    error: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>`,
+                    warning: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>`,
+                    info: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>`
+                };
+                return icons[type] || icons.info;
+            }
+        }
+
+        // Initialize notification manager
+        const notifications = new NotificationManager();
+        // Example usage in your existing code:
+        function showNotification(message, type) {
+            notifications.show(message, type);
         }
     </script>
 </body>
