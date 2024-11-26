@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html class="h-full bg-gray-50">
+<html class="h-full">
 <head>
     <title>Kubernetes Service Monitor</title>
     <script src="https://unpkg.com/htmx.org"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
@@ -20,9 +21,9 @@
     </script>
 </head>
 <body class="h-full">
-    <div class="min-h-full">
+    <div class="min-h-full bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
         <!-- Navigation -->
-        <nav class="bg-k8s-blue">
+        <nav class="bg-k8s-blue dark:bg-k8s-gray">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex h-16 items-center justify-between">
                     <div class="flex items-center">
@@ -35,13 +36,30 @@
                             <h1 class="text-white text-xl font-bold">Kubernetes Service Monitor</h1>
                         </div>
                     </div>
+
+                    <div class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow">
+                        <div class="flex items-center space-x-4">
+                            <select id="context-select" class="border rounded px-2 py-1 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <!-- existing context options -->
+                            </select>
+                            <span id="context-mode" class="text-sm text-gray-600 dark:text-gray-300"></span>
+                        </div>
+                        
+                        <!-- Add theme toggle button -->
+                        <button 
+                            onclick="toggleTheme()"
+                            class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            aria-label="Toggle theme">
+                            <span id="theme-icon" class="text-xl">🌞</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </nav>
 
         <!-- Add this after the navigation bar -->
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
-            <div class="bg-white shadow-sm rounded-lg p-4 mb-6">
+            <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-4 mb-6">
                 <div class="flex flex-col sm:flex-row gap-4">
                     <div class="flex-shrink-0">
                         <div class="flex items-center space-x-4">
@@ -90,15 +108,7 @@
         </main>
     </div>
 
-    <div class="fixed top-4 right-4 z-50" id="context-switcher" style="display: none;">
-        <div class="bg-white p-4 rounded-lg shadow-lg border border-gray-200">
-            <h3 class="text-sm font-medium text-gray-900 mb-2">Kubernetes Context</h3>
-            <select id="context-select" 
-                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-            </select>
-            <p class="mt-1 text-xs text-gray-500" id="context-mode"></p>
-        </div>
-    </div>
+    
 
     <script>
         // Store hidden namespaces in localStorage
@@ -133,11 +143,11 @@
             const visibleGroups = groups.filter(group => !hiddenNamespaces.has(group.namespace));
             
             container.innerHTML = visibleGroups.map(group => `
-                <div class="mb-6 bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200">
-                    <div class="flex items-center justify-between bg-gray-50 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
+                <div class="mb-6 bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-800 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors duration-150"
                          onclick="toggleNamespace('${group.namespace}')">
                         <div class="flex items-center space-x-2">
-                            <h2 class="text-lg font-semibold text-gray-900">
+                            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
                                 ${group.namespace}
                             </h2>
                             <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-k8s-blue bg-opacity-10 text-k8s-blue">
@@ -152,17 +162,17 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
-                    <div id="ns-${group.namespace}" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 p-4">
+                    <div id="ns-${group.namespace}" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 p-4 ">
                         ${group.services.map(service => `
-                            <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow duration-200">
+                            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow duration-200">
                                 <div class="flex items-center justify-between mb-4">
-                                    <h3 class="text-lg font-medium text-gray-900 cursor-pointer" onclick="copyToClipboard('${service.name}','service')">${service.name}</h3>
+                                    <h3 class="text-lg font-medium text-gray-900 dark:text-white cursor-pointer" onclick="copyToClipboard('${service.name}','service')">${service.name}</h3>
                                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${!service.lastFailure ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
                                         ${!service.lastFailure ? 'Healthy' : 'Failed'}
                                     </span>
                                 </div>
                                 <div class="space-y-2">
-                                    <div class="text-sm text-gray-500">Type: <span class="text-gray-900">${service.type}</span></div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">Type: <span class="text-gray-900 dark:text-white">${service.type}</span></div>
                                     <div class="text-sm text-gray-500">Cluster IP: <span class="text-gray-900">${service.clusterIP}</span></div>
                                     <div class="text-sm text-gray-500">Uptime: <span class="text-gray-900">${service.uptime}</span></div>
                                     
@@ -311,7 +321,7 @@
             try {
                 const response = await fetch('/api/contexts');
                 if (response.status === 400) {
-                    document.getElementById('context-mode').textContent = 'Running in-cluster';
+                    document.getElementById('context-mode').textContent = 'In-Cluster';
                     return;
                 }
                 
@@ -333,7 +343,7 @@
                     select.appendChild(option);
                 });
                 
-                document.getElementById('context-mode').textContent = 'Running on desktop';
+                document.getElementById('context-mode').textContent = 'Desktop';
                 document.getElementById('context-switcher').style.display = 'block';
             } catch (err) {
                 console.error('Failed to load contexts:', err);
@@ -374,6 +384,30 @@
 
         // Initial load
         loadContexts();
+
+        // Theme handling
+        function setTheme(theme) {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+                document.getElementById('theme-icon').textContent = '🌙';
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('theme-icon').textContent = '🌞';
+            }
+            localStorage.setItem('theme', theme);
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            setTheme(isDark ? 'light' : 'dark');
+        }
+
+        // Initialize theme
+        if (localStorage.theme === 'dark' || (!localStorage.theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            setTheme('dark');
+        } else {
+            setTheme('light');
+        }
     </script>
 </body>
 </html>
