@@ -20,11 +20,24 @@ A lightweight web application that provides a real-time overview of Kubernetes s
 - Access to a Kubernetes cluster
 - `kubectl` configured with appropriate permissions
 
-### Running Locally
+### Obtaining release binaries
+
+Latest build is available through [GitHub releases page](https://github.com/x0ddf/tiny-status-page/releases).
+If you don't see your platform binary consider to build yourselves.
+
+### Running in Kubernetes
+
+Apply the deployment manifest:
+```bash
+kubectl apply -f deploy/kubernetes.yaml
+```
+
+
+### Building Locally
 
 - Clone the repository:
 ```bash
-git clone https://github.com/yourusername/tiny-status-page.git
+git clone https://github.com/x0ddf/tiny-status-page.git
 cd tiny-status-page
 ```
 - Build the application:
@@ -35,14 +48,6 @@ go build -o tiny-status-page cmd/backend/main.go
 ```bash
 ./tiny-status-page
 ```
-
-### Running in Kubernetes
-
-Apply the deployment manifest:
-```bash
-kubectl apply -f deploy/kubernetes.yaml
-```
-
 
 ### Container Registry
 

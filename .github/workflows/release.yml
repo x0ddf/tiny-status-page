@@ -5,7 +5,7 @@ on:
     tags: [ 'v*' ]
 
 env:
-  PLATFORMS: "linux darwrin windows"
+  PLATFORMS: "linux darwin windows"
   ARCH: "amd64 arm64"
 jobs:
   build:
